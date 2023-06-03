@@ -11,8 +11,7 @@ using System.IO;
 using System.Net.Http;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
-
+using WebPWrapper;
 
 namespace LobeClient
 {
@@ -44,7 +43,7 @@ namespace LobeClient
                 foreach (var item in info.GetFiles())
                 {
                     if (!item.Name.ToLower().Contains(".jpg") && !item.Name.ToLower().Contains(".png") &&
-                        !item.Name.ToLower().Contains(".jpeg") && !item.Name.ToLower().Contains(".gif"))
+                        !item.Name.ToLower().Contains(".jpeg") && !item.Name.ToLower().Contains(".gif") && !item.Name.ToLower().Contains(".webp"))
                         continue;
 
                     TextBox at = new TextBox();
@@ -65,6 +64,63 @@ namespace LobeClient
             }
         }
 
+        async void imageProcess(Image image, int i)
+        {
+            using (MemoryStream m = new MemoryStream())
+            {
+                image.Save(m, image.RawFormat);
+                byte[] imageBytes = m.ToArray();
+
+                // Convert byte[] to Base64 String
+                string base64String = Convert.ToBase64String(imageBytes);
+
+                var values = new Dictionary<string, string>
+                            {
+                                { "image", base64String }
+                            };
+
+                var stringPayload = JsonConvert.SerializeObject(values);
+                var content = new StringContent(stringPayload, Encoding.UTF8, "application/json");
+                var response = await client.PostAsync(urlBox.Text, content);
+                var responseString = await response.Content.ReadAsStringAsync();
+
+                JObject jObject = JObject.Parse(responseString);
+                var jToken = jObject.SelectToken("predictions");
+
+                foreach (var token in jToken)
+                {
+                    beforerList[i] = token.SelectToken("label").ToString();
+
+                    break;
+                }
+            }
+        }
+
+        async void imageProcess2(byte[] imageBytes, int i)
+        {
+            string base64String = Convert.ToBase64String(imageBytes);
+
+            var values = new Dictionary<string, string>
+                        {
+                            { "image", base64String }
+                        };
+
+            var stringPayload = JsonConvert.SerializeObject(values);
+            var content = new StringContent(stringPayload, Encoding.UTF8, "application/json");
+            var response = await client.PostAsync(urlBox.Text, content);
+            var responseString = await response.Content.ReadAsStringAsync();
+
+            JObject jObject = JObject.Parse(responseString);
+            var jToken = jObject.SelectToken("predictions");
+
+            foreach (var token in jToken)
+            {
+                beforerList[i] = token.SelectToken("label").ToString();
+
+                break;
+            }
+        }
+
         private async void button2_Click(object sender, EventArgs e)
         {
             if (level == 2)
@@ -75,37 +131,57 @@ namespace LobeClient
                 var item = afterList[i];
                 try
                 {
-                    using (Image image = Image.FromFile(pathBox.Text + "\\" + item))
+                    if(item.Contains(".webp"))
                     {
-                        using (MemoryStream m = new MemoryStream())
+                        byte[] rawWebP = File.ReadAllBytes(pathBox.Text + "\\" + item);
+                        imageProcess2(rawWebP, i);
+                        /*
+                        using (WebP webp = new WebP())
                         {
-                            image.Save(m, image.RawFormat);
-                            byte[] imageBytes = m.ToArray();
+                            var image = webp.Decode(rawWebP);
+                            imageProcess((Image)image, i);
+                        }
+                        */
+                    }
+                    else
+                    {
 
-                            // Convert byte[] to Base64 String
-                            string base64String = Convert.ToBase64String(imageBytes);
-
-                            var values = new Dictionary<string, string>
+                        using (Image image = Image.FromFile(pathBox.Text + "\\" + item))
+                        {
+                            imageProcess(image, i);
+                            /*
+                            using (MemoryStream m = new MemoryStream())
                             {
-                                { "image", base64String }
-                            };
+                                image.Save(m, image.RawFormat);
+                                byte[] imageBytes = m.ToArray();
 
-                            var stringPayload = JsonConvert.SerializeObject(values);
-                            var content = new StringContent(stringPayload, Encoding.UTF8, "application/json");
-                            var response = await client.PostAsync(urlBox.Text, content);
-                            var responseString = await response.Content.ReadAsStringAsync();
+                                // Convert byte[] to Base64 String
+                                string base64String = Convert.ToBase64String(imageBytes);
 
-                            JObject jObject = JObject.Parse(responseString);
-                            var jToken = jObject.SelectToken("predictions");
+                                var values = new Dictionary<string, string>
+                                {
+                                    { "image", base64String }
+                                };
 
-                            foreach (var token in jToken)
-                            {
-                                beforerList[i] = token.SelectToken("label").ToString();
+                                var stringPayload = JsonConvert.SerializeObject(values);
+                                var content = new StringContent(stringPayload, Encoding.UTF8, "application/json");
+                                var response = await client.PostAsync(urlBox.Text, content);
+                                var responseString = await response.Content.ReadAsStringAsync();
 
-                                break;
+                                JObject jObject = JObject.Parse(responseString);
+                                var jToken = jObject.SelectToken("predictions");
+
+                                foreach (var token in jToken)
+                                {
+                                    beforerList[i] = token.SelectToken("label").ToString();
+
+                                    break;
+                                }
                             }
+                            */
                         }
                     }
+
                 }
                 catch (Exception ex)
                 {
